@@ -8,42 +8,80 @@ class PredictionService:
     
     def calculate_moving_average(self, data: List[Dict]) -> List[Dict]:
         """Calculate 20-day and 50-day moving averages"""
+        if not data:
+            return []
+            
         df = pd.DataFrame(data)
-        df = df.sort_values('date') #Sort oldest first 
+        
+        # Ensure data is sorted by date (oldest first) for accurate moving averages
+        df = df.sort_values('date')
         
         # Calculate moving averages
-        df['ma_20'] = df['close'].rolling(window=20).mean()
-        df['ma_50'] = df['close'].rolling(window=50).mean()
+        df['ma_20'] = df['close'].rolling(window=min(20, len(df))).mean()
+        df['ma_50'] = df['close'].rolling(window=min(50, len(df))).mean()
         
         # Convert back to list of dictionaries, newest first
         df = df.sort_values('date', ascending=False)
-        return df.to_dict('records')
+        
+        # Convert numpy types to native Python types for JSON serialization
+        result = []
+        for _, row in df.iterrows():
+            item = row.to_dict()
+            # Convert numpy types to native Python types
+            for key, value in item.items():
+                if hasattr(value, 'item'):  # For numpy types
+                    item[key] = value.item()
+            result.append(item)
+            
+        return result
     
     def generate_prediction(self, data: List[Dict]) -> Dict:
         """Generate simple trend prediction"""
-        if len(data) < 50:
-            return {"error": "Not enough data for prediction"}
+        if not data or len(data) < 10:
+            return {
+                "error": "Not enough data for prediction",
+                "prediction": 0,
+                "confidence": 0,
+                "trend": "neutral"
+            }
         
-        recent_data = data[:20] # Last 20 days
+        # Use the most recent data points for prediction (up to 30 days)
+        recent_data = data[:min(30, len(data))]
         recent_prices = [item['close'] for item in recent_data]
         
-        # Calculate trend
-        x = np.arange(len(recent_prices))
-        slope = np.polyfit(x, recent_prices, 1)[0]
-        
-        current_price = recent_prices[0]
-        predicted_price = current_price + (slope * 5) # 5-day prediction
-        
-        trend = "bullish" if slope > 0 else "bearish"
-        confidence = min(abs(slope) * 10, 100) # Simple confidence score
-        
-        return {
-            "current_price": current_price,
-            "predicted_price": round(predicted_price, 2),
-            "trend": trend,
-            "confidence": round(confidence, 1),
-            "recommendation": self._get_recommendation(trend, confidence)
-        }
+        try:
+            # Calculate trend using linear regression
+            x = np.arange(len(recent_prices))
+            slope = np.polyfit(x, recent_prices, 1)[0]
+            
+            current_price = recent_prices[0]
+            # Calculate 5-day prediction
+            predicted_change = (slope * 5) / current_price * 100  # as percentage
+            
+            # Determine trend and confidence
+            if abs(slope) < 0.1:  # Flat trend threshold
+                trend = "neutral"
+                confidence = 30.0
+            else:
+                trend = "bullish" if slope > 0 else "bearish"
+                # Confidence based on slope magnitude, capped at 95%
+                confidence = min(abs(slope) * 100, 95.0)
+            
+            return {
+                "prediction": round(predicted_change, 2),  # as percentage
+                "confidence": round(confidence, 1),
+                "trend": trend,
+                "recommendation": self._get_recommendation(trend, confidence)
+            }
+            
+        except Exception as e:
+            print(f"Error generating prediction: {str(e)}")
+            return {
+                "error": "Error generating prediction",
+                "prediction": 0,
+                "confidence": 0,
+                "trend": "neutral"
+            }
         
     def _get_recommendation(self, trend: str, confidence: float) -> str:
         """Generate investment recommendation"""
