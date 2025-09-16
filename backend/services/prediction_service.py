@@ -9,16 +9,30 @@ class PredictionService:
     def calculate_moving_average(self, data: List[Dict]) -> List[Dict]:
         """Calculate 20-day and 50-day moving averages"""
         if not data:
+            print("No data provided for moving average calculation")
             return []
+            
+        print(f"Calculating moving averages for {len(data)} data points")
+        print(f"First few data points: {data[:2]}")
             
         df = pd.DataFrame(data)
         
         # Ensure data is sorted by date (oldest first) for accurate moving averages
         df = df.sort_values('date')
         
-        # Calculate moving averages
-        df['ma_20'] = df['close'].rolling(window=min(20, len(df))).mean()
-        df['ma_50'] = df['close'].rolling(window=min(50, len(df))).mean()
+        # Calculate moving averages with min_periods=1 to get partial moving averages
+        df['ma_20'] = df['close'].rolling(window=20, min_periods=1).mean()
+        df['ma_50'] = df['close'].rolling(window=50, min_periods=1).mean()
+        
+        # For the first few data points, we can use a smaller window to get some moving averages
+        # This provides more useful data points for the chart
+        if len(df) < 20:
+            # If we have less than 20 points, use a smaller window for ma_20
+            df['ma_20'] = df['close'].rolling(window=len(df), min_periods=1).mean()
+        
+        # Print some debug info about the moving averages
+        print(f"First few ma_20 values: {df['ma_20'].head(25).tolist()}")
+        print(f"First few ma_50 values: {df['ma_50'].head(50).tolist()}")
         
         # Convert back to list of dictionaries, newest first
         df = df.sort_values('date', ascending=False)
@@ -32,6 +46,10 @@ class PredictionService:
                 if hasattr(value, 'item'):  # For numpy types
                     item[key] = value.item()
             result.append(item)
+        
+        print(f"First result item: {result[0]}")
+        print(f"ma_20 values in result: {[d.get('ma_20') for d in result[:20]]}")
+        print(f"ma_50 values in result: {[d.get('ma_50') for d in result[:50]]}")
             
         return result
     
