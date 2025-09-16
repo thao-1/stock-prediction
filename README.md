@@ -60,19 +60,7 @@ A full-stack application for stock market analysis and prediction.
    npm start
    ```
 
-## Deployment
 
-### Backend
-Deploy the FastAPI backend to a service like:
-- Heroku
-- Google Cloud Run
-- AWS Elastic Beanstalk
-
-### Frontend
-Deploy the React frontend to:
-- Vercel
-- Netlify
-- GitHub Pages
 
 ## License
 
